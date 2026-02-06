@@ -89,6 +89,44 @@
             }
         }
         
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 0;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #9ca3af;
+            animation: typingAnimation 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+        
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes typingAnimation {
+            0%, 60%, 100% {
+                opacity: 0.3;
+                transform: translateY(0);
+            }
+            30% {
+                opacity: 1;
+                transform: translateY(-8px);
+            }
+        }
+        
         .file-input {
             display: none;
         }
@@ -1078,14 +1116,14 @@
                 const currentModel = activeTab.model;
                 const modelName = models.find(m => m.id === currentModel)?.name || '';
                 
-                // Добавляем сообщение пользователя и пустое сообщение ассистента
+                // Добавляем сообщение пользователя и пустое сообщение ассистента с индикатором печатания
                 let assistantMessageIndex;
                 setTabs(prevTabs => prevTabs.map(tab => {
                     if (tab.id === activeTabId) {
                         const newMessages = [
                             ...tab.messages, 
                             userMessage,
-                            { role: 'assistant', content: '', model: currentModel, modelName: modelName }
+                            { role: 'assistant', content: '', model: currentModel, modelName: modelName, isTyping: true }
                         ];
                         assistantMessageIndex = newMessages.length - 1; // Индекс последнего сообщения (ассистент)
                         
@@ -1152,7 +1190,8 @@
                                                 role: 'assistant',
                                                 content: accumulatedContent,
                                                 model: currentModel,
-                                                modelName: modelName
+                                                modelName: modelName,
+                                                isTyping: false // Убираем индикатор печатания когда начинают поступать данные
                                             };
                                             return { ...t, messages: newMessages };
                                         }
@@ -1177,7 +1216,8 @@
                                 role: 'assistant',
                                 content: `Ошибка: ${error.message}. Попробуйте еще раз.`,
                                 model: currentModel,
-                                modelName: modelName
+                                modelName: modelName,
+                                isTyping: false
                             };
                             return { ...t, messages: newMessages };
                         }
@@ -2406,10 +2446,18 @@
                                                 }`}>
                                                     {message.role === 'user' ? 'Вы' : (message.modelName || models.find(m => m.id === activeTab.model)?.name)}
                                                 </div>
-                                                <div 
-                                                    className="text-gray-800 text-sm leading-relaxed markdown-content"
-                                                    dangerouslySetInnerHTML={{ __html: marked.parse(message.content || '') }}
-                                                />
+                                                {message.isTyping ? (
+                                                    <div className="typing-indicator">
+                                                        <div className="typing-dot"></div>
+                                                        <div className="typing-dot"></div>
+                                                        <div className="typing-dot"></div>
+                                                    </div>
+                                                ) : (
+                                                    <div 
+                                                        className="text-gray-800 text-sm leading-relaxed markdown-content"
+                                                        dangerouslySetInnerHTML={{ __html: marked.parse(message.content || '') }}
+                                                    />
+                                                )}
                                                 {message.files && message.files.length > 0 && (
                                                     <div className="mt-3 space-y-2">
                                                         {message.files.map((file, fileIndex) => (
