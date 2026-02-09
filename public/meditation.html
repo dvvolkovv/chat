@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <title>Nomira Meditation</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #7c3aed;
+            --accent-light: #a78bfa;
+            --accent-glow: rgba(124, 58, 237, 0.3);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        html, body, #root {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== Breathing Circle ===== */
+        .breath-container {
+            position: relative;
+            width: 260px;
+            height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .breath-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 3px solid rgba(124, 58, 237, 0.2);
+        }
+
+        .breath-ring-progress {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 3px solid var(--accent-light);
+            clip-path: inset(0 0 50% 0);
+            transition: clip-path 0.3s;
+        }
+
+        .breath-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, var(--accent-light), var(--accent));
+            box-shadow: 0 0 60px var(--accent-glow), 0 0 120px rgba(124, 58, 237, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: transform 4s ease-in-out, box-shadow 4s ease-in-out;
+        }
+
+        .breath-circle.inhale {
+            transform: scale(1.5);
+            box-shadow: 0 0 80px var(--accent-glow), 0 0 160px rgba(124, 58, 237, 0.25);
+        }
+
+        .breath-circle.hold {
+            transform: scale(1.5);
+            box-shadow: 0 0 80px var(--accent-glow), 0 0 160px rgba(124, 58, 237, 0.25);
+            transition: none;
+        }
+
+        .breath-circle.exhale {
+            transform: scale(1);
+            box-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(124, 58, 237, 0.1);
+            transition: transform 6s ease-in-out, box-shadow 6s ease-in-out;
+        }
+
+        .breath-label {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .breath-timer {
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 4px;
+        }
+
+        /* ===== Particles ===== */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: var(--accent-light);
+            opacity: 0;
+            animation: float-particle linear infinite;
+        }
+
+        @keyframes float-particle {
+            0% { opacity: 0; transform: translateY(100vh) scale(0); }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { opacity: 0; transform: translateY(-10vh) scale(1); }
+        }
+
+        /* ===== Navigation ===== */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 calc(8px + var(--safe-bottom));
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            transition: color 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .nav-item.active {
+            color: var(--accent-light);
+        }
+
+        .nav-item svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        /* ===== Page Layout ===== */
+        .page {
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: calc(16px + var(--safe-top)) 20px calc(80px + var(--safe-bottom));
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        /* ===== Cards ===== */
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .card:active {
+            transform: scale(0.98);
+        }
+
+        .card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .card-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        /* ===== Buttons ===== */
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active { transform: scale(0.97); }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #6d28d9);
+            color: white;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        /* ===== Timer Presets ===== */
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .preset-btn {
+            padding: 12px 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .preset-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .preset-btn span {
+            display: block;
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .preset-btn.active span {
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* ===== Sound Selector ===== */
+        .sound-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .sound-btn {
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .sound-btn.active {
+            border-color: var(--accent);
+            color: var(--text-primary);
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        .sound-btn .icon { font-size: 20px; }
+
+        /* ===== Stats ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--accent-light);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ===== Streak ===== */
+        .streak-bar {
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;
+            margin-bottom: 24px;
+        }
+
+        .streak-day {
+            flex: 1;
+            text-align: center;
+        }
+
+        .streak-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin: 0 auto 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            background: var(--bg-secondary);
+            border: 2px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .streak-dot.done {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .streak-day-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+
+        /* ===== Session Screen ===== */
+        .session-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-primary);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .session-time {
+            font-size: 56px;
+            font-weight: 200;
+            letter-spacing: 4px;
+            margin-top: 32px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .session-phase {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .session-controls {
+            display: flex;
+            gap: 16px;
+            margin-top: 40px;
+        }
+
+        .session-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .session-btn:active { transform: scale(0.9); }
+
+        .session-btn-stop {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .session-btn-pause {
+            background: rgba(124, 58, 237, 0.2);
+            color: var(--accent-light);
+        }
+
+        /* ===== Complete Screen ===== */
+        .complete-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-primary);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .complete-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        .complete-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .complete-stats {
+            display: flex;
+            gap: 32px;
+            margin: 24px 0 40px;
+        }
+
+        .complete-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-light);
+        }
+
+        .complete-stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* ===== History ===== */
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.06);
+        }
+
+        .history-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .history-icon {
+            font-size: 20px;
+        }
+
+        .history-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .history-date {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .history-duration {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-light);
+        }
+
+        /* ===== Breathing Patterns Section ===== */
+        .pattern-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+
+        /* ===== Volume Slider ===== */
+        .volume-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+        }
+
+        .volume-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--bg-secondary);
+            outline: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar { width: 0; }
+
+        /* ===== Animations ===== */
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fade-in 0.4s ease-out;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px var(--accent-glow); }
+            50% { box-shadow: 0 0 40px var(--accent-glow), 0 0 60px rgba(124, 58, 237, 0.15); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // ========== Data ==========
+
+        const BREATHING_PATTERNS = [
+            {
+                id: 'relaxing',
+                name: 'Расслабление',
+                desc: 'Глубокое дыхание для снятия стресса',
+                icon: '🌊',
+                color: '#7c3aed',
+                inhale: 4, hold: 4, exhale: 6, holdOut: 0,
+                tag: 'Для начинающих',
+                tagColor: 'rgba(52, 211, 153, 0.15)',
+                tagText: '#34d399',
+            },
+            {
+                id: 'box',
+                name: 'Квадратное дыхание',
+                desc: 'Баланс и концентрация. 4-4-4-4',
+                icon: '⬜',
+                color: '#3b82f6',
+                inhale: 4, hold: 4, exhale: 4, holdOut: 4,
+                tag: 'Фокус',
+                tagColor: 'rgba(59, 130, 246, 0.15)',
+                tagText: '#60a5fa',
+            },
+            {
+                id: '478',
+                name: 'Метод 4-7-8',
+                desc: 'Техника доктора Вейла для сна',
+                icon: '🌙',
+                color: '#8b5cf6',
+                inhale: 4, hold: 7, exhale: 8, holdOut: 0,
+                tag: 'Для сна',
+                tagColor: 'rgba(139, 92, 246, 0.15)',
+                tagText: '#a78bfa',
+            },
+            {
+                id: 'energy',
+                name: 'Энергия',
+                desc: 'Быстрое бодрящее дыхание',
+                icon: '⚡',
+                color: '#f59e0b',
+                inhale: 2, hold: 0, exhale: 2, holdOut: 0,
+                tag: 'Бодрость',
+                tagColor: 'rgba(245, 158, 11, 0.15)',
+                tagText: '#fbbf24',
+            },
+        ];
+
+        const MEDITATION_TYPES = [
+            { id: 'breath', name: 'Дыхание', desc: 'Сфокусируйтесь на дыхании', icon: '🫁', color: '#7c3aed' },
+            { id: 'body', name: 'Тело', desc: 'Сканирование тела', icon: '🧘', color: '#06b6d4' },
+            { id: 'mind', name: 'Разум', desc: 'Наблюдение за мыслями', icon: '🧠', color: '#8b5cf6' },
+            { id: 'gratitude', name: 'Благодарность', desc: 'Практика благодарности', icon: '💜', color: '#ec4899' },
+        ];
+
+        const SOUNDS = [
+            { id: 'silence', name: 'Тишина', icon: '🔇' },
+            { id: 'rain', name: 'Дождь', icon: '🌧️' },
+            { id: 'ocean', name: 'Океан', icon: '🌊' },
+            { id: 'forest', name: 'Лес', icon: '🌿' },
+            { id: 'fire', name: 'Костёр', icon: '🔥' },
+            { id: 'wind', name: 'Ветер', icon: '💨' },
+        ];
+
+        const DURATION_PRESETS = [
+            { minutes: 3, label: '3', sub: 'мин' },
+            { minutes: 5, label: '5', sub: 'мин' },
+            { minutes: 10, label: '10', sub: 'мин' },
+            { minutes: 15, label: '15', sub: 'мин' },
+        ];
+
+        const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+        // ========== Audio Engine ==========
+
+        class AmbientAudio {
+            constructor() {
+                this.ctx = null;
+                this.nodes = [];
+                this.volume = 0.5;
+                this.playing = false;
+                this.currentSound = 'silence';
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            stop() {
+                this.nodes.forEach(n => {
+                    try { n.stop && n.stop(); } catch(e) {}
+                    try { n.disconnect(); } catch(e) {}
+                });
+                this.nodes = [];
+                this.playing = false;
+            }
+
+            setVolume(v) {
+                this.volume = v;
+                this.nodes.forEach(n => {
+                    if (n.gain) n.gain.value = v;
+                });
+            }
+
+            createNoise(type) {
+                this.init();
+                this.stop();
+                if (type === 'silence') return;
+
+                const bufferSize = 2 * this.ctx.sampleRate;
+                const buffer = this.ctx.createBuffer(2, bufferSize, this.ctx.sampleRate);
+
+                for (let ch = 0; ch < 2; ch++) {
+                    const data = buffer.getChannelData(ch);
+                    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                    for (let i = 0; i < bufferSize; i++) {
+                        const white = Math.random() * 2 - 1;
+                        if (type === 'rain') {
+                            // Brown noise + filtering for rain
+                            b0 = (b0 + (0.02 * white)) / 1.02;
+                            data[i] = b0 * 3.5 + white * 0.15;
+                        } else if (type === 'ocean') {
+                            // Pink noise with slow modulation
+                            b0 = 0.99886 * b0 + white * 0.0555179;
+                            b1 = 0.99332 * b1 + white * 0.0750759;
+                            b2 = 0.96900 * b2 + white * 0.1538520;
+                            b3 = 0.86650 * b3 + white * 0.3104856;
+                            b4 = 0.55000 * b4 + white * 0.5329522;
+                            b5 = -0.7616 * b5 - white * 0.0168980;
+                            data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+                            b6 = white * 0.115926;
+                        } else if (type === 'forest') {
+                            b0 = 0.99886 * b0 + white * 0.0555179;
+                            b1 = 0.99332 * b1 + white * 0.0750759;
+                            b2 = 0.96900 * b2 + white * 0.1538520;
+                            data[i] = (b0 + b1 + b2) * 0.06 + white * 0.02;
+                        } else if (type === 'fire') {
+                            b0 = (b0 + (0.04 * white)) / 1.04;
+                            const crackle = Math.random() > 0.997 ? (Math.random() - 0.5) * 0.8 : 0;
+                            data[i] = b0 * 2.5 + crackle;
+                        } else if (type === 'wind') {
+                            b0 = 0.998 * b0 + white * 0.06;
+                            b1 = 0.95 * b1 + white * 0.1;
+                            data[i] = (b0 + b1) * 1.5;
+                        }
+                    }
+                }
+
+                const source = this.ctx.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+
+                const gain = this.ctx.createGain();
+                gain.gain.value = this.volume;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = type === 'rain' ? 3000 : type === 'ocean' ? 1200 : type === 'fire' ? 2000 : 2500;
+
+                source.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                source.start();
+                this.nodes = [source, gain, filter];
+                this.playing = true;
+                this.currentSound = type;
+            }
+
+            playBell() {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 528;
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 3);
+
+                const osc2 = this.ctx.createOscillator();
+                const gain2 = this.ctx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.value = 396;
+                gain2.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 4);
+                osc2.connect(gain2);
+                gain2.connect(this.ctx.destination);
+                osc2.start();
+                osc2.stop(this.ctx.currentTime + 4);
+            }
+        }
+
+        const ambientAudio = new AmbientAudio();
+
+        // ========== Storage ==========
+
+        function loadStats() {
+            try {
+                return JSON.parse(localStorage.getItem('meditation_stats')) || {
+                    totalSessions: 0,
+                    totalMinutes: 0,
+                    currentStreak: 0,
+                    longestStreak: 0,
+                    weekDays: {},
+                    history: [],
+                };
+            } catch { return { totalSessions: 0, totalMinutes: 0, currentStreak: 0, longestStreak: 0, weekDays: {}, history: [] }; }
+        }
+
+        function saveStats(stats) {
+            localStorage.setItem('meditation_stats', JSON.stringify(stats));
+        }
+
+        function todayKey() {
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function getWeekDays() {
+            const days = [];
+            const now = new Date();
+            const monday = new Date(now);
+            monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                days.push(d.toISOString().slice(0, 10));
+            }
+            return days;
+        }
+
+        // ========== Particles ==========
+
+        function Particles() {
+            const particles = useRef(
+                Array.from({ length: 20 }, (_, i) => ({
+                    id: i,
+                    left: Math.random() * 100,
+                    size: 2 + Math.random() * 4,
+                    duration: 10 + Math.random() * 20,
+                    delay: Math.random() * 15,
+                    opacity: 0.2 + Math.random() * 0.4,
+                }))
+            ).current;
+
+            return (
+                <div className="particles">
+                    {particles.map(p => (
+                        <div key={p.id} className="particle" style={{
+                            left: p.left + '%',
+                            width: p.size + 'px',
+                            height: p.size + 'px',
+                            animationDuration: p.duration + 's',
+                            animationDelay: p.delay + 's',
+                        }} />
+                    ))}
+                </div>
+            );
+        }
+
+        // ========== Nav Icons ==========
+
+        function NavIcons({ name }) {
+            const icons = {
+                breathe: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2 2"/></svg>,
+                meditate: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="6" r="3"/><path d="M12 9v3M7 21c0-3 2-5 5-7 3 2 5 4 5 7"/><path d="M8 15l-3 2M16 15l3 2"/></svg>,
+                stats: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 20h16M6 16v4M10 12v8M14 8v12M18 4v16"/></svg>,
+            };
+            return icons[name] || null;
+        }
+
+        // ========== Session Screen ==========
+
+        function SessionScreen({ pattern, duration, sound, soundVolume, onComplete, onCancel }) {
+            const [timeLeft, setTimeLeft] = useState(duration * 60);
+            const [phase, setPhase] = useState('inhale');
+            const [phaseTime, setPhaseTime] = useState(pattern.inhale);
+            const [paused, setPaused] = useState(false);
+            const timerRef = useRef(null);
+            const phaseTimerRef = useRef(null);
+            const startTimeRef = useRef(Date.now());
+            const hasPlayedBell = useRef(false);
+
+            useEffect(() => {
+                if (!hasPlayedBell.current) {
+                    ambientAudio.playBell();
+                    hasPlayedBell.current = true;
+                }
+                ambientAudio.createNoise(sound);
+                ambientAudio.setVolume(soundVolume);
+                return () => ambientAudio.stop();
+            }, []);
+
+            useEffect(() => {
+                if (paused) return;
+
+                timerRef.current = setInterval(() => {
+                    setTimeLeft(prev => {
+                        if (prev <= 1) {
+                            clearInterval(timerRef.current);
+                            ambientAudio.playBell();
+                            setTimeout(() => {
+                                const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000);
+                                onComplete(Math.round(elapsed / 60));
+                            }, 2000);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+
+                return () => clearInterval(timerRef.current);
+            }, [paused]);
+
+            useEffect(() => {
+                if (paused) return;
+
+                const phases = [];
+                phases.push({ name: 'inhale', dur: pattern.inhale, label: 'Вдох' });
+                if (pattern.hold > 0) phases.push({ name: 'hold', dur: pattern.hold, label: 'Задержка' });
+                phases.push({ name: 'exhale', dur: pattern.exhale, label: 'Выдох' });
+                if (pattern.holdOut > 0) phases.push({ name: 'holdOut', dur: pattern.holdOut, label: 'Пауза' });
+
+                let idx = 0;
+                setPhase(phases[0].name);
+                setPhaseTime(phases[0].dur);
+
+                const nextPhase = () => {
+                    idx = (idx + 1) % phases.length;
+                    setPhase(phases[idx].name);
+                    setPhaseTime(phases[idx].dur);
+                    phaseTimerRef.current = setTimeout(nextPhase, phases[idx].dur * 1000);
+                };
+
+                phaseTimerRef.current = setTimeout(nextPhase, phases[0].dur * 1000);
+
+                return () => clearTimeout(phaseTimerRef.current);
+            }, [paused, pattern]);
+
+            const formatTime = (s) => {
+                const m = Math.floor(s / 60);
+                const sec = s % 60;
+                return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+            };
+
+            const phaseLabels = {
+                inhale: 'Вдох',
+                hold: 'Задержка',
+                exhale: 'Выдох',
+                holdOut: 'Пауза',
+            };
+
+            const circleClass = phase === 'hold' || phase === 'holdOut' ? 'hold' : phase;
+
+            return (
+                <div className="session-screen fade-in">
+                    <Particles />
+                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div className="breath-container">
+                            <div className="breath-ring" />
+                            <div className={`breath-circle ${circleClass}`}>
+                                <div className="breath-label">{phaseLabels[phase]}</div>
+                                <div className="breath-timer">{phaseTime} сек</div>
+                            </div>
+                        </div>
+                        <div className="session-time">{formatTime(timeLeft)}</div>
+                        <div className="session-phase">
+                            {pattern.name}
+                        </div>
+                        <div className="session-controls">
+                            <button className="session-btn session-btn-stop" onClick={onCancel}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                            </button>
+                            <button className="session-btn session-btn-pause" onClick={() => setPaused(!paused)}>
+                                {paused ? (
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 20,12 8,19"/></svg>
+                                ) : (
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== Complete Screen ==========
+
+        function CompleteScreen({ minutes, onClose }) {
+            return (
+                <div className="complete-screen fade-in">
+                    <div className="complete-icon">✨</div>
+                    <div className="complete-title">Отличная практика!</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                        Вы стали на шаг ближе к внутренней гармонии
+                    </div>
+                    <div className="complete-stats">
+                        <div>
+                            <div className="complete-stat-value">{minutes || 1}</div>
+                            <div className="complete-stat-label">минут</div>
+                        </div>
+                        <div>
+                            <div className="complete-stat-value">🔥</div>
+                            <div className="complete-stat-label">в серии</div>
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={onClose} style={{ maxWidth: '280px' }}>
+                        Готово
+                    </button>
+                </div>
+            );
+        }
+
+        // ========== Breathe Page ==========
+
+        function BreathePage({ onStartSession }) {
+            const [selectedPattern, setSelectedPattern] = useState(BREATHING_PATTERNS[0]);
+            const [selectedDuration, setSelectedDuration] = useState(5);
+            const [selectedSound, setSelectedSound] = useState('silence');
+            const [soundVolume, setSoundVolume] = useState(0.5);
+
+            const testSound = (id) => {
+                setSelectedSound(id);
+                if (id !== 'silence') {
+                    ambientAudio.createNoise(id);
+                    ambientAudio.setVolume(soundVolume);
+                    setTimeout(() => ambientAudio.stop(), 3000);
+                } else {
+                    ambientAudio.stop();
+                }
+            };
+
+            return (
+                <div className="page fade-in">
+                    <div className="page-title">Дыхание</div>
+                    <div className="page-subtitle">Выберите технику и начните практику</div>
+
+                    {/* Breathing Patterns */}
+                    <div style={{ marginBottom: '24px' }}>
+                        {BREATHING_PATTERNS.map(p => (
+                            <div key={p.id} className={`card ${selectedPattern.id === p.id ? 'selected' : ''}`}
+                                 onClick={() => setSelectedPattern(p)}>
+                                <div className="card-row">
+                                    <div className="card-icon" style={{ background: `${p.color}20`, color: p.color }}>
+                                        {p.icon}
+                                    </div>
+                                    <div>
+                                        <div className="card-title">{p.name}</div>
+                                        <div className="card-desc">{p.desc}</div>
+                                        <span className="pattern-tag" style={{
+                                            background: p.tagColor,
+                                            color: p.tagText,
+                                        }}>{p.tag}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Duration */}
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Длительность</div>
+                    <div className="preset-grid">
+                        {DURATION_PRESETS.map(d => (
+                            <button key={d.minutes} className={`preset-btn ${selectedDuration === d.minutes ? 'active' : ''}`}
+                                    onClick={() => setSelectedDuration(d.minutes)}>
+                                {d.label}<span>{d.sub}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Sound */}
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Фоновый звук</div>
+                    <div className="sound-grid">
+                        {SOUNDS.map(s => (
+                            <button key={s.id} className={`sound-btn ${selectedSound === s.id ? 'active' : ''}`}
+                                    onClick={() => testSound(s.id)}>
+                                <span className="icon">{s.icon}</span> {s.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    {selectedSound !== 'silence' && (
+                        <div className="volume-row">
+                            <span style={{ fontSize: '16px' }}>🔈</span>
+                            <input type="range" className="volume-slider" min="0" max="1" step="0.05"
+                                   value={soundVolume} onChange={e => {
+                                       const v = parseFloat(e.target.value);
+                                       setSoundVolume(v);
+                                       ambientAudio.setVolume(v);
+                                   }} />
+                            <span style={{ fontSize: '16px' }}>🔊</span>
+                        </div>
+                    )}
+
+                    {/* Start Button */}
+                    <button className="btn btn-primary" style={{ marginTop: '8px' }}
+                            onClick={() => onStartSession(selectedPattern, selectedDuration, selectedSound, soundVolume)}>
+                        Начать — {selectedDuration} мин
+                    </button>
+
+                    <div style={{ height: '20px' }} />
+                </div>
+            );
+        }
+
+        // ========== Meditate Page ==========
+
+        function MeditatePage({ onStartSession }) {
+            const [selectedType, setSelectedType] = useState(MEDITATION_TYPES[0]);
+            const [selectedDuration, setSelectedDuration] = useState(10);
+            const [selectedSound, setSelectedSound] = useState('silence');
+
+            const defaultPattern = { ...BREATHING_PATTERNS[0], name: selectedType.name };
+
+            return (
+                <div className="page fade-in">
+                    <div className="page-title">Медитация</div>
+                    <div className="page-subtitle">Выберите тип практики</div>
+
+                    <div style={{ marginBottom: '24px' }}>
+                        {MEDITATION_TYPES.map(t => (
+                            <div key={t.id} className={`card ${selectedType.id === t.id ? 'selected' : ''}`}
+                                 onClick={() => setSelectedType(t)}>
+                                <div className="card-row">
+                                    <div className="card-icon" style={{ background: `${t.color}20` }}>
+                                        {t.icon}
+                                    </div>
+                                    <div>
+                                        <div className="card-title">{t.name}</div>
+                                        <div className="card-desc">{t.desc}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Длительность</div>
+                    <div className="preset-grid">
+                        {DURATION_PRESETS.map(d => (
+                            <button key={d.minutes} className={`preset-btn ${selectedDuration === d.minutes ? 'active' : ''}`}
+                                    onClick={() => setSelectedDuration(d.minutes)}>
+                                {d.label}<span>{d.sub}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Фоновый звук</div>
+                    <div className="sound-grid">
+                        {SOUNDS.map(s => (
+                            <button key={s.id} className={`sound-btn ${selectedSound === s.id ? 'active' : ''}`}
+                                    onClick={() => setSelectedSound(s.id)}>
+                                <span className="icon">{s.icon}</span> {s.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <button className="btn btn-primary" style={{ marginTop: '8px' }}
+                            onClick={() => onStartSession(defaultPattern, selectedDuration, selectedSound, 0.5)}>
+                        Начать медитацию — {selectedDuration} мин
+                    </button>
+
+                    <div style={{ height: '20px' }} />
+                </div>
+            );
+        }
+
+        // ========== Stats Page ==========
+
+        function StatsPage({ stats }) {
+            const weekDays = getWeekDays();
+
+            return (
+                <div className="page fade-in">
+                    <div className="page-title">Статистика</div>
+                    <div className="page-subtitle">Ваш прогресс в медитации</div>
+
+                    {/* Week streak */}
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Эта неделя</div>
+                    <div className="streak-bar">
+                        {weekDays.map((day, i) => (
+                            <div key={day} className="streak-day">
+                                <div className={`streak-dot ${stats.weekDays[day] ? 'done' : ''}`}>
+                                    {stats.weekDays[day] ? '✓' : ''}
+                                </div>
+                                <div className="streak-day-label">{DAY_NAMES[i]}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Stats cards */}
+                    <div className="stats-grid">
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.totalSessions}</div>
+                            <div className="stat-label">Сессий</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.totalMinutes}</div>
+                            <div className="stat-label">Минут</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.currentStreak}</div>
+                            <div className="stat-label">Дней подряд</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.longestStreak}</div>
+                            <div className="stat-label">Лучшая серия</div>
+                        </div>
+                    </div>
+
+                    {/* History */}
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>История</div>
+                    {stats.history.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
+                            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🧘</div>
+                            <div>Пока нет сессий</div>
+                            <div style={{ fontSize: '13px', marginTop: '4px' }}>Начните первую медитацию!</div>
+                        </div>
+                    ) : (
+                        stats.history.slice(0, 20).map((h, i) => (
+                            <div key={i} className="history-item">
+                                <div className="history-left">
+                                    <span className="history-icon">{h.icon || '🧘'}</span>
+                                    <div>
+                                        <div className="history-name">{h.name}</div>
+                                        <div className="history-date">{h.date}</div>
+                                    </div>
+                                </div>
+                                <div className="history-duration">{h.minutes} мин</div>
+                            </div>
+                        ))
+                    )}
+
+                    <div style={{ height: '20px' }} />
+                </div>
+            );
+        }
+
+        // ========== App ==========
+
+        function App() {
+            const [tab, setTab] = useState('breathe');
+            const [session, setSession] = useState(null);
+            const [completeMinutes, setCompleteMinutes] = useState(null);
+            const [stats, setStats] = useState(loadStats);
+
+            const startSession = useCallback((pattern, duration, sound, volume) => {
+                setSession({ pattern, duration, sound, soundVolume: volume });
+            }, []);
+
+            const handleComplete = useCallback((minutes) => {
+                ambientAudio.stop();
+                setSession(null);
+
+                const newStats = { ...stats };
+                newStats.totalSessions += 1;
+                newStats.totalMinutes += minutes || 1;
+                newStats.weekDays[todayKey()] = true;
+
+                // Calculate streak
+                let streak = 0;
+                const d = new Date();
+                while (true) {
+                    const key = d.toISOString().slice(0, 10);
+                    if (newStats.weekDays[key]) {
+                        streak++;
+                        d.setDate(d.getDate() - 1);
+                    } else break;
+                }
+                newStats.currentStreak = streak;
+                if (streak > newStats.longestStreak) newStats.longestStreak = streak;
+
+                newStats.history.unshift({
+                    name: session?.pattern?.name || 'Медитация',
+                    icon: session?.pattern?.icon || '🧘',
+                    minutes: minutes || 1,
+                    date: new Date().toLocaleDateString('ru-RU', {
+                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                    }),
+                });
+
+                if (newStats.history.length > 50) newStats.history = newStats.history.slice(0, 50);
+
+                setStats(newStats);
+                saveStats(newStats);
+                setCompleteMinutes(minutes);
+            }, [stats, session]);
+
+            const handleCancel = useCallback(() => {
+                ambientAudio.stop();
+                const elapsed = session ? Math.max(1, Math.round((Date.now()) / 60000) % 60) : 0;
+                setSession(null);
+            }, [session]);
+
+            // Active session
+            if (session) {
+                return (
+                    <SessionScreen
+                        pattern={session.pattern}
+                        duration={session.duration}
+                        sound={session.sound}
+                        soundVolume={session.soundVolume}
+                        onComplete={handleComplete}
+                        onCancel={() => { ambientAudio.stop(); setSession(null); }}
+                    />
+                );
+            }
+
+            // Complete screen
+            if (completeMinutes !== null) {
+                return (
+                    <CompleteScreen
+                        minutes={completeMinutes}
+                        onClose={() => setCompleteMinutes(null)}
+                    />
+                );
+            }
+
+            return (
+                <div style={{ height: '100%', position: 'relative' }}>
+                    <Particles />
+                    <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
+                        {tab === 'breathe' && <BreathePage onStartSession={startSession} />}
+                        {tab === 'meditate' && <MeditatePage onStartSession={startSession} />}
+                        {tab === 'stats' && <StatsPage stats={stats} />}
+                    </div>
+
+                    {/* Bottom Navigation */}
+                    <div className="bottom-nav">
+                        <button className={`nav-item ${tab === 'breathe' ? 'active' : ''}`}
+                                onClick={() => setTab('breathe')}>
+                            <NavIcons name="breathe" />
+                            Дыхание
+                        </button>
+                        <button className={`nav-item ${tab === 'meditate' ? 'active' : ''}`}
+                                onClick={() => setTab('meditate')}>
+                            <NavIcons name="meditate" />
+                            Медитация
+                        </button>
+                        <button className={`nav-item ${tab === 'stats' ? 'active' : ''}`}
+                                onClick={() => setTab('stats')}>
+                            <NavIcons name="stats" />
+                            Статистика
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

@@ -19,6 +19,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Медитация
+app.get('/meditation', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'meditation.html'));
+});
+
 // Здоровье для Railway
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
