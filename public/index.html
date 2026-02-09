@@ -427,6 +427,12 @@
             border-top: 1px solid #e5e7eb;
             margin: 1.5em 0;
         }
+        .markdown-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
     </style>
 </head>
 <body>
@@ -1094,6 +1100,21 @@
                 alert('Аккаунт успешно удален');
             };
 
+            // Определение запроса на генерацию изображения
+            const isImageGenerationRequest = (text) => {
+                if (!text || !text.trim()) return false;
+                const lower = text.toLowerCase();
+                const patterns = [
+                    /\b(нарисуй|нарисовать|рисуй)\b/,
+                    /\b(сгенерируй|сгенерировать|генерируй)\b.*\b(изображени|картинк|фото|рисун)/,
+                    /\b(создай|создать)\b.*\b(изображени|картинк|фото|рисун)/,
+                    /\b(сделай|сделать)\b.*\b(картинк|изображени|рисун)/,
+                    /\b(draw|paint|sketch)\b/i,
+                    /\b(generate|create|make)\b.*\b(image|picture|photo|illustration)\b/i,
+                ];
+                return patterns.some(p => p.test(lower));
+            };
+
             const sendMessage = async () => {
                 if (!input.trim() && attachedFiles.length === 0) return;
                 if (!activeTab || !activeTab.chat_id) {
@@ -1177,6 +1198,41 @@
                         const result = await response.json();
 
                         // Обновляем сообщение ассистента с результатом анализа
+                        setTabs(prevTabs => prevTabs.map(t => {
+                            if (t.id === activeTabId) {
+                                const newMessages = [...t.messages];
+                                const lastIndex = newMessages.length - 1;
+                                newMessages[lastIndex] = {
+                                    role: 'assistant',
+                                    content: result.success ? result.analysis : `Ошибка: ${result.error || 'Неизвестная ошибка'}`,
+                                    model: currentModel,
+                                    modelName: modelName,
+                                    isTyping: false
+                                };
+                                return { ...t, messages: newMessages };
+                            }
+                            return t;
+                        }));
+
+                    } else if (isImageGenerationRequest(messageText)) {
+                        // Генерация изображения через /webhook/generate_image
+                        const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/generate_image', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email: user.email,
+                                chat_id: activeTab.chat_id,
+                                prompt: messageText
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(errorText || 'Ошибка генерации изображения');
+                        }
+
+                        const result = await response.json();
+
                         setTabs(prevTabs => prevTabs.map(t => {
                             if (t.id === activeTabId) {
                                 const newMessages = [...t.messages];
