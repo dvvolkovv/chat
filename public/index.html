@@ -1229,7 +1229,9 @@
                         setTabs(prevTabs => prevTabs.map(t => {
                             if (t.id === activeTabId) {
                                 const newMessages = [...t.messages];
-                                const lastIndex = newMessages.length - 1;
+                                let lastIndex = -1;
+                                for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                if (lastIndex === -1) return t;
                                 newMessages[lastIndex] = {
                                     role: 'assistant',
                                     content: result.success ? result.analysis : `Ошибка: ${result.error || 'Неизвестная ошибка'}`,
@@ -1264,7 +1266,9 @@
                         setTabs(prevTabs => prevTabs.map(t => {
                             if (t.id === activeTabId) {
                                 const newMessages = [...t.messages];
-                                const lastIndex = newMessages.length - 1;
+                                let lastIndex = -1;
+                                for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                if (lastIndex === -1) return t;
                                 newMessages[lastIndex] = {
                                     role: 'assistant',
                                     content: result.success ? result.analysis : `Ошибка: ${result.error || 'Неизвестная ошибка'}`,
@@ -1319,7 +1323,9 @@
                                         setTabs(prevTabs => prevTabs.map(t => {
                                             if (t.id === activeTabId) {
                                                 const newMessages = [...t.messages];
-                                                const lastIndex = newMessages.length - 1;
+                                                let lastIndex = -1;
+                                                for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                                if (lastIndex === -1) return t;
                                                 newMessages[lastIndex] = {
                                                     role: 'assistant',
                                                     content: accumulatedContent,
@@ -1343,8 +1349,9 @@
                             setTabs(prevTabs => prevTabs.map(t => {
                                 if (t.id === activeTabId) {
                                     const newMessages = [...t.messages];
-                                    const lastIndex = newMessages.length - 1;
-                                    if (newMessages[lastIndex] && newMessages[lastIndex].isTyping) {
+                                    let lastIndex = -1;
+                                    for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                    if (lastIndex !== -1 && newMessages[lastIndex].isTyping) {
                                         newMessages[lastIndex] = {
                                             ...newMessages[lastIndex],
                                             content: accumulatedContent || '(прервано)',
@@ -1368,12 +1375,13 @@
 
                 } catch (error) {
                     if (error.name === 'AbortError') {
-                        // Запрос прерван — убираем isTyping у последнего сообщения
+                        // Запрос прерван — убираем isTyping у последнего ассистентского сообщения
                         setTabs(prevTabs => prevTabs.map(t => {
                             if (t.id === activeTabId) {
                                 const newMessages = [...t.messages];
-                                const lastIndex = newMessages.length - 1;
-                                if (newMessages[lastIndex] && newMessages[lastIndex].isTyping) {
+                                let lastIndex = -1;
+                                for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                if (lastIndex !== -1 && newMessages[lastIndex].isTyping) {
                                     newMessages[lastIndex] = {
                                         ...newMessages[lastIndex],
                                         content: '(прервано)',
@@ -1392,7 +1400,9 @@
                     setTabs(prevTabs => prevTabs.map(t => {
                         if (t.id === activeTabId) {
                             const newMessages = [...t.messages];
-                            const lastIndex = newMessages.length - 1;
+                            let lastIndex = -1;
+                            for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                            if (lastIndex === -1) return t;
                             newMessages[lastIndex] = {
                                 role: 'assistant',
                                 content: `Ошибка: ${error.message}. Попробуйте еще раз.`,
