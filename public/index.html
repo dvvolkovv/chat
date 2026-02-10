@@ -539,6 +539,8 @@
             const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false);
             const [systemPromptText, setSystemPromptText] = useState('');
             const [isSavingSystemPrompt, setIsSavingSystemPrompt] = useState(false);
+            const [showTopupModal, setShowTopupModal] = useState(false);
+            const [isTopupLoading, setIsTopupLoading] = useState(false);
             const [userProfile, setUserProfile] = useState({
                 likes: [], dislikes: [], interests: [], desires: [], intentions: [],
                 values: [], beliefs: [], skills: [], hobbies: [],
@@ -565,6 +567,41 @@
             const messageQueueRef = useRef([]);
 
             const activeTab = tabs.find(tab => tab.id === activeTabId);
+
+            const API = 'https://nomira-ai-test.up.railway.app';
+
+            const fetchBalance = async () => {
+                if (!user?.email) return;
+                try {
+                    const res = await fetch(API + '/webhook/get_balance', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email: user.email })
+                    });
+                    const data = await res.json();
+                    if (data.balance !== undefined) setTokenBalance(data.balance);
+                } catch (e) {}
+            };
+
+            const handleTopup = async (tariffId) => {
+                setIsTopupLoading(true);
+                try {
+                    const res = await fetch(API + '/webhook/topup', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email: user.email, tariff_id: tariffId })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        setTokenBalance(data.balance);
+                        setShowTopupModal(false);
+                    }
+                } catch (e) {
+                    alert('Ошибка пополнения');
+                } finally {
+                    setIsTopupLoading(false);
+                }
+            };
 
             // Загрузка профиля пользователя из БД
             const loadUserProfile = async (email) => {
@@ -1300,6 +1337,24 @@
                     });
 
                     if (!response.ok) {
+                        let errorData;
+                        try { errorData = await response.json(); } catch(e) {}
+                        if (errorData && errorData.error === 'insufficient_balance') {
+                            setTabs(prevTabs => prevTabs.map(t => {
+                                if (t.id === activeTabId) {
+                                    const newMessages = [...t.messages];
+                                    let lastIndex = -1;
+                                    for (let i = newMessages.length - 1; i >= 0; i--) { if (newMessages[i].role === 'assistant') { lastIndex = i; break; } }
+                                    if (lastIndex !== -1) {
+                                        newMessages[lastIndex] = { role: 'assistant', content: 'Недостаточно токенов для отправки сообщения. Пополните баланс.', model: currentModel, modelName: modelName, isTyping: false };
+                                    }
+                                    return { ...t, messages: newMessages };
+                                }
+                                return t;
+                            }));
+                            setShowTopupModal(true);
+                            return;
+                        }
                         throw new Error('Ошибка отправки сообщения');
                     }
 
@@ -1421,6 +1476,7 @@
                 } finally {
                     abortControllerRef.current = null;
                     setIsGenerating(false);
+                    fetchBalance();
                     processQueue();
                 }
             };
@@ -2697,13 +2753,17 @@
 
                             {/* Баланс токенов */}
                             <div>
-                                <span className="token-badge" style={{ padding: '4px 10px', fontSize: '11px', gap: '4px' }}>
+                                <button onClick={() => setShowTopupModal(true)} className="token-badge" style={{
+                                    padding: '4px 10px', fontSize: '11px', gap: '4px', border: 'none', cursor: 'pointer',
+                                    background: tokenBalance < 500 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    transition: 'opacity 0.2s', opacity: 1
+                                }} onMouseEnter={e => e.target.style.opacity = '0.85'} onMouseLeave={e => e.target.style.opacity = '1'} title="Пополнить баланс">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                     <span className="hidden sm:inline">{tokenBalance.toLocaleString()}</span>
                                     <span className="sm:hidden">{tokenBalance >= 1000 ? (tokenBalance / 1000).toFixed(1) + 'k' : tokenBalance}</span>
-                                </span>
+                                </button>
                             </div>
                         </div>
 
@@ -3005,6 +3065,51 @@
                                         )}
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Модалка пополнения баланса */}
+                    {showTopupModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+                            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 animate-fadeIn">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-lg font-semibold text-gray-800">Пополнить баланс</h3>
+                                    <button onClick={() => setShowTopupModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                                <p className="text-sm text-gray-500 mb-5">
+                                    Текущий баланс: <span className="font-semibold text-gray-700">{tokenBalance.toLocaleString()}</span> токенов
+                                </p>
+                                <div className="grid grid-cols-3 gap-3 mb-5">
+                                    {[
+                                        { id: 1, name: 'Starter', price: '199', tokens: '50 000', badge: null },
+                                        { id: 2, name: 'Standard', price: '499', tokens: '200 000', badge: 'Популярный' },
+                                        { id: 3, name: 'Premium', price: '1 999', tokens: '1 000 000', badge: null }
+                                    ].map(tariff => (
+                                        <button
+                                            key={tariff.id}
+                                            onClick={() => handleTopup(tariff.id)}
+                                            disabled={isTopupLoading}
+                                            className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                tariff.id === 2 ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tariff.badge && (
+                                                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                    {tariff.badge}
+                                                </span>
+                                            )}
+                                            <span className="text-xs font-medium text-gray-500 mb-1">{tariff.name}</span>
+                                            <span className="text-xl font-bold text-gray-800">{tariff.price} ₽</span>
+                                            <span className="text-xs text-gray-500 mt-1">{tariff.tokens} токенов</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-[11px] text-gray-400 text-center">
+                                    Тестовый режим: оплата не списывается
+                                </p>
                             </div>
                         </div>
                     )}
