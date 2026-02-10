@@ -551,11 +551,14 @@
                 personalOther: [], professionalOther: [], communicationOther: [],
                 goalsOther: [], socialOther: [], healthOther: []
             });
+            const [isGenerating, setIsGenerating] = useState(false);
             const messagesEndRef = useRef(null);
             const textareaRef = useRef(null);
             const fileInputRef = useRef(null);
             const cameraInputRef = useRef(null);
             const mediaRecorderRef = useRef(null);
+            const abortControllerRef = useRef(null);
+            const messageQueueRef = useRef([]);
 
             const activeTab = tabs.find(tab => tab.id === activeTabId);
 
@@ -1096,6 +1099,21 @@
                 return patterns.some(p => p.test(lower));
             };
 
+            const processQueue = () => {
+                if (messageQueueRef.current.length > 0) {
+                    const next = messageQueueRef.current.shift();
+                    executeMessage(next.messageText, next.messageFiles, true);
+                }
+            };
+
+            const stopGeneration = () => {
+                messageQueueRef.current = [];
+                if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                    abortControllerRef.current = null;
+                }
+            };
+
             const sendMessage = async () => {
                 if (!input.trim() && attachedFiles.length === 0) return;
                 if (!activeTab || !activeTab.chat_id) {
@@ -1103,37 +1121,62 @@
                     return;
                 }
 
-                // Очищаем поле ввода сразу
                 const messageText = input;
                 const messageFiles = [...attachedFiles];
                 setInput('');
                 setAttachedFiles([]);
-                
-                const userMessage = { 
-                    role: 'user', 
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                }
+
+                if (isGenerating) {
+                    // Ставим в очередь — сообщение пользователя показываем сразу
+                    const userMessage = { role: 'user', content: messageText, files: messageFiles };
+                    setTabs(prevTabs => prevTabs.map(tab => {
+                        if (tab.id === activeTabId) {
+                            return { ...tab, messages: [...tab.messages, userMessage] };
+                        }
+                        return tab;
+                    }));
+                    messageQueueRef.current.push({ messageText, messageFiles });
+                    return;
+                }
+
+                executeMessage(messageText, messageFiles, false);
+            };
+
+            const executeMessage = async (messageText, messageFiles, fromQueue) => {
+                const currentTab = tabs.find(t => t.id === activeTabId);
+                if (!currentTab || !currentTab.chat_id) return;
+
+                setIsGenerating(true);
+                const controller = new AbortController();
+                abortControllerRef.current = controller;
+
+                const userMessage = {
+                    role: 'user',
                     content: messageText,
                     files: messageFiles
                 };
-                
-                // Получаем текущую модель
-                const currentModel = activeTab.model;
+
+                const currentModel = currentTab.model;
                 const modelName = models.find(m => m.id === currentModel)?.name || '';
-                
-                // Добавляем сообщение пользователя и пустое сообщение ассистента с индикатором печатания
+
                 let assistantMessageIndex;
-                const isFirstMessage = activeTab.messages.length === 0;
+                const realMessages = currentTab.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && !m.isTyping));
+                const isFirstMessage = realMessages.length === 0;
                 const newChatName = isFirstMessage
                     ? (messageText || 'Файлы').slice(0, 30) + ((messageText || '').length > 30 ? '...' : '')
                     : null;
 
                 setTabs(prevTabs => prevTabs.map(tab => {
                     if (tab.id === activeTabId) {
+                        // Если из очереди — user message уже добавлено в sendMessage
                         const newMessages = [
-                            ...tab.messages,
-                            userMessage,
+                            ...(fromQueue ? tab.messages : [...tab.messages, userMessage]),
                             { role: 'assistant', content: '', model: currentModel, modelName: modelName, isTyping: true }
                         ];
-                        assistantMessageIndex = newMessages.length - 1; // Индекс последнего сообщения (ассистент)
+                        assistantMessageIndex = newMessages.length - 1;
 
                         return {
                             ...tab,
@@ -1145,12 +1188,11 @@
                     return tab;
                 }));
 
-                // Сохраняем имя чата в БД при первом сообщении
                 if (isFirstMessage && newChatName && user && user.email) {
                     fetch('https://nomira-ai-test.up.railway.app/webhook/rename_chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: user.email, chat_id: activeTab.chat_id, name: newChatName })
+                        body: JSON.stringify({ email: user.email, chat_id: currentTab.chat_id, name: newChatName })
                     }).catch(() => {});
                 }
 
@@ -1158,20 +1200,17 @@
                     const hasFiles = messageFiles.length > 0 && messageFiles.some(f => f.file);
 
                     if (hasFiles) {
-                        // Отправка файла через /webhook/analyze_file
-                        const fileObj = messageFiles[0]; // Берём первый файл
-                        // Сжимаем изображение если оно слишком большое
+                        const fileObj = messageFiles[0];
                         const processedFile = await compressImage(fileObj.file);
                         const base64Data = await fileToBase64(processedFile);
 
                         const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/analyze_file', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
+                            headers: { 'Content-Type': 'application/json' },
+                            signal: controller.signal,
                             body: JSON.stringify({
                                 email: user.email,
-                                chat_id: activeTab.chat_id,
+                                chat_id: currentTab.chat_id,
                                 model: modelName,
                                 file_data: base64Data,
                                 file_name: processedFile.name,
@@ -1187,7 +1226,6 @@
 
                         const result = await response.json();
 
-                        // Обновляем сообщение ассистента с результатом анализа
                         setTabs(prevTabs => prevTabs.map(t => {
                             if (t.id === activeTabId) {
                                 const newMessages = [...t.messages];
@@ -1205,13 +1243,13 @@
                         }));
 
                     } else if (isImageGenerationRequest(messageText)) {
-                        // Генерация изображения через /webhook/generate_image
                         const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/generate_image', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
+                            signal: controller.signal,
                             body: JSON.stringify({
                                 email: user.email,
-                                chat_id: activeTab.chat_id,
+                                chat_id: currentTab.chat_id,
                                 prompt: messageText
                             })
                         });
@@ -1243,12 +1281,11 @@
                     // Обычная отправка текста через /webhook/chat (streaming)
                     const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/chat', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
+                        signal: controller.signal,
                         body: JSON.stringify({
                             email: user.email,
-                            chat_id: activeTab.chat_id,
+                            chat_id: currentTab.chat_id,
                             model: modelName,
                             message: messageText
                         })
@@ -1258,48 +1295,69 @@
                         throw new Error('Ошибка отправки сообщения');
                     }
 
-                    // Читаем streaming ответ
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let accumulatedContent = '';
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
 
-                        const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
+                            const chunk = decoder.decode(value, { stream: true });
+                            const lines = chunk.split('\n');
 
-                        for (const line of lines) {
-                            if (!line.trim()) continue;
+                            for (const line of lines) {
+                                if (!line.trim()) continue;
 
-                            try {
-                                const data = JSON.parse(line);
+                                try {
+                                    const data = JSON.parse(line);
 
-                                if (data.type === 'item' && data.content) {
-                                    accumulatedContent += data.content;
+                                    if (data.type === 'item' && data.content) {
+                                        accumulatedContent += data.content;
 
-                                    // Обновляем сообщение ассистента в реальном времени
-                                    setTabs(prevTabs => prevTabs.map(t => {
-                                        if (t.id === activeTabId) {
-                                            const newMessages = [...t.messages];
-                                            const lastIndex = newMessages.length - 1;
-                                            newMessages[lastIndex] = {
-                                                role: 'assistant',
-                                                content: accumulatedContent,
-                                                model: currentModel,
-                                                modelName: modelName,
-                                                isTyping: false // Убираем индикатор печатания когда начинают поступать данные
-                                            };
-                                            return { ...t, messages: newMessages };
-                                        }
-                                        return t;
-                                    }));
+                                        setTabs(prevTabs => prevTabs.map(t => {
+                                            if (t.id === activeTabId) {
+                                                const newMessages = [...t.messages];
+                                                const lastIndex = newMessages.length - 1;
+                                                newMessages[lastIndex] = {
+                                                    role: 'assistant',
+                                                    content: accumulatedContent,
+                                                    model: currentModel,
+                                                    modelName: modelName,
+                                                    isTyping: false
+                                                };
+                                                return { ...t, messages: newMessages };
+                                            }
+                                            return t;
+                                        }));
+                                    }
+                                } catch (e) {
+                                    // Игнорируем ошибки парсинга неполных JSON
                                 }
-                            } catch (e) {
-                                // Игнорируем ошибки парсинга неполных JSON
                             }
                         }
+                    } catch (readError) {
+                        if (readError.name === 'AbortError') {
+                            // Стриминг прерван пользователем — оставляем то что уже накопили
+                            setTabs(prevTabs => prevTabs.map(t => {
+                                if (t.id === activeTabId) {
+                                    const newMessages = [...t.messages];
+                                    const lastIndex = newMessages.length - 1;
+                                    if (newMessages[lastIndex] && newMessages[lastIndex].isTyping) {
+                                        newMessages[lastIndex] = {
+                                            ...newMessages[lastIndex],
+                                            content: accumulatedContent || '(прервано)',
+                                            isTyping: false
+                                        };
+                                    }
+                                    return { ...t, messages: newMessages };
+                                }
+                                return t;
+                            }));
+                            return; // finally всё равно выполнится
+                        }
+                        throw readError;
                     }
                     } // конец else (обычный чат)
 
@@ -1309,9 +1367,28 @@
                     }
 
                 } catch (error) {
+                    if (error.name === 'AbortError') {
+                        // Запрос прерван — убираем isTyping у последнего сообщения
+                        setTabs(prevTabs => prevTabs.map(t => {
+                            if (t.id === activeTabId) {
+                                const newMessages = [...t.messages];
+                                const lastIndex = newMessages.length - 1;
+                                if (newMessages[lastIndex] && newMessages[lastIndex].isTyping) {
+                                    newMessages[lastIndex] = {
+                                        ...newMessages[lastIndex],
+                                        content: '(прервано)',
+                                        isTyping: false
+                                    };
+                                }
+                                return { ...t, messages: newMessages };
+                            }
+                            return t;
+                        }));
+                        return;
+                    }
+
                     console.error('Ошибка отправки сообщения:', error);
-                    
-                    // Обновляем последнее сообщение ассистента с ошибкой
+
                     setTabs(prevTabs => prevTabs.map(t => {
                         if (t.id === activeTabId) {
                             const newMessages = [...t.messages];
@@ -1327,6 +1404,10 @@
                         }
                         return t;
                     }));
+                } finally {
+                    abortControllerRef.current = null;
+                    setIsGenerating(false);
+                    processQueue();
                 }
             };
 
@@ -2736,20 +2817,32 @@
                                         style={{ minHeight: '24px', maxHeight: '200px' }}
                                     />
                                     
-                                    {/* Кнопка отправки */}
-                                    <button
-                                        onClick={sendMessage}
-                                        disabled={!activeTab || (!input.trim() && attachedFiles.length === 0)}
-                                        className={`flex-shrink-0 p-1.5 md:p-2 rounded-lg transition-colors ${
-                                            activeTab && (input.trim() || attachedFiles.length > 0)
-                                                ? 'bg-gray-800 active:bg-black md:hover:bg-gray-900 text-white cursor-pointer'
-                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                        }`}
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                                        </svg>
-                                    </button>
+                                    {/* Кнопка отправки / стоп */}
+                                    {isGenerating ? (
+                                        <button
+                                            onClick={stopGeneration}
+                                            className="flex-shrink-0 p-1.5 md:p-2 rounded-lg transition-colors bg-red-500 active:bg-red-700 md:hover:bg-red-600 text-white cursor-pointer"
+                                            title="Остановить генерацию"
+                                        >
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                <rect x="6" y="6" width="12" height="12" rx="2" />
+                                            </svg>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={sendMessage}
+                                            disabled={!activeTab || (!input.trim() && attachedFiles.length === 0)}
+                                            className={`flex-shrink-0 p-1.5 md:p-2 rounded-lg transition-colors ${
+                                                activeTab && (input.trim() || attachedFiles.length > 0)
+                                                    ? 'bg-gray-800 active:bg-black md:hover:bg-gray-900 text-white cursor-pointer'
+                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                            </svg>
+                                        </button>
+                                    )}
                                 </div>
                                 <p className="text-xs text-gray-400 text-center mt-2 md:mt-3 hidden sm:block">
                                     Enter для отправки, Shift+Enter для новой строки
