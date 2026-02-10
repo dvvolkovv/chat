@@ -1121,27 +1121,39 @@
                 
                 // Добавляем сообщение пользователя и пустое сообщение ассистента с индикатором печатания
                 let assistantMessageIndex;
+                const isFirstMessage = activeTab.messages.length === 0;
+                const newChatName = isFirstMessage
+                    ? (messageText || 'Файлы').slice(0, 30) + ((messageText || '').length > 30 ? '...' : '')
+                    : null;
+
                 setTabs(prevTabs => prevTabs.map(tab => {
                     if (tab.id === activeTabId) {
                         const newMessages = [
-                            ...tab.messages, 
+                            ...tab.messages,
                             userMessage,
                             { role: 'assistant', content: '', model: currentModel, modelName: modelName, isTyping: true }
                         ];
                         assistantMessageIndex = newMessages.length - 1; // Индекс последнего сообщения (ассистент)
-                        
-                        return { 
-                            ...tab, 
+
+                        return {
+                            ...tab,
                             messages: newMessages,
-                            name: tab.messages.length === 0 
-                                ? (messageText || 'Файлы').slice(0, 30) + (messageText.length > 30 ? '...' : '')
-                                : tab.name,
+                            name: newChatName || tab.name,
                             isMessagesLoaded: true
                         };
                     }
                     return tab;
                 }));
-                
+
+                // Сохраняем имя чата в БД при первом сообщении
+                if (isFirstMessage && newChatName && user && user.email) {
+                    fetch('https://nomira-ai-test.up.railway.app/webhook/rename_chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: user.email, chat_id: activeTab.chat_id, name: newChatName })
+                    }).catch(() => {});
+                }
+
                 try {
                     const hasFiles = messageFiles.length > 0 && messageFiles.some(f => f.file);
 
