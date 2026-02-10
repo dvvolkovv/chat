@@ -521,7 +521,16 @@
             const [confirmPassword, setConfirmPassword] = useState('');
             const [authLoading, setAuthLoading] = useState(false);
             const [authError, setAuthError] = useState('');
-            
+            const [resetStep, setResetStep] = useState(0);
+            const [resetEmail, setResetEmail] = useState('');
+            const [resetCode, setResetCode] = useState('');
+            const [resetToken, setResetToken] = useState('');
+            const [newPassword, setNewPassword] = useState('');
+            const [confirmNewPassword, setConfirmNewPassword] = useState('');
+            const [resetLoading, setResetLoading] = useState(false);
+            const [resetError, setResetError] = useState('');
+            const [resetSuccess, setResetSuccess] = useState('');
+
             const [tabs, setTabs] = useState([]);
             const [activeTabId, setActiveTabId] = useState(null);
             const [isLoadingChats, setIsLoadingChats] = useState(false);
@@ -962,6 +971,67 @@
                 setUser(null);
                 setTabs([]);
                 setActiveTabId(null);
+            };
+
+            // Восстановление пароля — шаг 1: запрос кода
+            const handleRequestReset = async () => {
+                setResetError(''); setResetSuccess('');
+                if (!resetEmail) { setResetError('Введите email'); return; }
+                try {
+                    setResetLoading(true);
+                    const res = await fetch(API + '/webhook/request_reset', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email: resetEmail })
+                    });
+                    const data = await res.json();
+                    if (data.error) { setResetError(data.error); return; }
+                    setResetSuccess('Код отправлен на ваш email');
+                    setResetStep(2);
+                } catch (e) { setResetError('Ошибка отправки. Попробуйте позже.'); }
+                finally { setResetLoading(false); }
+            };
+
+            // Восстановление пароля — шаг 2: проверка кода
+            const handleVerifyCode = async () => {
+                setResetError(''); setResetSuccess('');
+                if (!resetCode || resetCode.length !== 6) { setResetError('Введите 6-значный код'); return; }
+                try {
+                    setResetLoading(true);
+                    const res = await fetch(API + '/webhook/verify_reset_code', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email: resetEmail, code: resetCode })
+                    });
+                    const data = await res.json();
+                    if (data.error) { setResetError(data.error); return; }
+                    if (data.success && data.reset_token) { setResetToken(data.reset_token); setResetStep(3); }
+                } catch (e) { setResetError('Ошибка проверки кода.'); }
+                finally { setResetLoading(false); }
+            };
+
+            // Восстановление пароля — шаг 3: новый пароль
+            const handleResetPassword = async () => {
+                setResetError(''); setResetSuccess('');
+                if (!newPassword || newPassword.length < 6) { setResetError('Пароль должен содержать минимум 6 символов'); return; }
+                if (newPassword !== confirmNewPassword) { setResetError('Пароли не совпадают'); return; }
+                try {
+                    setResetLoading(true);
+                    const res = await fetch(API + '/webhook/reset_password', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email: resetEmail, reset_token: resetToken, new_password: newPassword })
+                    });
+                    const data = await res.json();
+                    if (data.error) { setResetError(data.error); return; }
+                    if (data.success) {
+                        setResetSuccess('Пароль успешно изменён!');
+                        setTimeout(() => handleCancelReset(), 2000);
+                    }
+                } catch (e) { setResetError('Ошибка сброса пароля.'); }
+                finally { setResetLoading(false); }
+            };
+
+            const handleCancelReset = () => {
+                setResetStep(0); setResetEmail(''); setResetCode(''); setResetToken('');
+                setNewPassword(''); setConfirmNewPassword(''); setResetError(''); setResetSuccess('');
             };
 
             // Загрузка чатов пользователя
@@ -1836,6 +1906,140 @@
                                         <span>Войти через Email</span>
                                     </button>
                                 </div>
+                            ) : resetStep > 0 ? (
+                                <div>
+                                    {/* Step indicator */}
+                                    <div className="flex items-center justify-center gap-2 mb-6">
+                                        {[1, 2, 3].map(step => (
+                                            <React.Fragment key={step}>
+                                                <div style={{
+                                                    width: 32, height: 32, borderRadius: '50%',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 14, fontWeight: 600,
+                                                    background: resetStep > step ? '#10b981' : resetStep === step ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#e5e7eb',
+                                                    color: resetStep >= step ? '#fff' : '#9ca3af',
+                                                    transition: 'all 0.3s'
+                                                }}>
+                                                    {resetStep > step ? '✓' : step}
+                                                </div>
+                                                {step < 3 && <div style={{ width: 32, height: 2, background: resetStep > step ? '#10b981' : '#e5e7eb', transition: 'all 0.3s' }} />}
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <h2 className="text-xl font-semibold text-gray-800 text-center">
+                                            {resetStep === 1 ? 'Восстановление пароля' : resetStep === 2 ? 'Введите код' : 'Новый пароль'}
+                                        </h2>
+                                        <p className="text-sm text-gray-500 text-center mt-1">
+                                            {resetStep === 1 ? 'Укажите email вашего аккаунта' : resetStep === 2 ? 'Мы отправили 6-значный код на вашу почту' : 'Придумайте новый пароль'}
+                                        </p>
+                                    </div>
+
+                                    {resetError && (
+                                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                                            {resetError}
+                                        </div>
+                                    )}
+                                    {resetSuccess && (
+                                        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+                                            {resetSuccess}
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-4 mb-4">
+                                        {resetStep === 1 && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                                <input
+                                                    type="email"
+                                                    value={resetEmail}
+                                                    onChange={(e) => { setResetEmail(e.target.value); setResetError(''); }}
+                                                    onKeyPress={(e) => { if (e.key === 'Enter') handleRequestReset(); }}
+                                                    placeholder="your@email.com"
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
+                                                    disabled={resetLoading}
+                                                />
+                                            </div>
+                                        )}
+                                        {resetStep === 2 && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Код подтверждения</label>
+                                                <input
+                                                    type="text"
+                                                    value={resetCode}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                        setResetCode(val);
+                                                        setResetError('');
+                                                    }}
+                                                    onKeyPress={(e) => { if (e.key === 'Enter' && resetCode.length === 6) handleVerifyCode(); }}
+                                                    placeholder="000000"
+                                                    maxLength={6}
+                                                    style={{ fontFamily: 'monospace', fontSize: 24, letterSpacing: 8, textAlign: 'center' }}
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
+                                                    disabled={resetLoading}
+                                                />
+                                            </div>
+                                        )}
+                                        {resetStep === 3 && (
+                                            <>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Новый пароль</label>
+                                                    <input
+                                                        type="password"
+                                                        value={newPassword}
+                                                        onChange={(e) => { setNewPassword(e.target.value); setResetError(''); }}
+                                                        placeholder="Минимум 6 символов"
+                                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
+                                                        disabled={resetLoading}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Подтвердите пароль</label>
+                                                    <input
+                                                        type="password"
+                                                        value={confirmNewPassword}
+                                                        onChange={(e) => { setConfirmNewPassword(e.target.value); setResetError(''); }}
+                                                        onKeyPress={(e) => { if (e.key === 'Enter') handleResetPassword(); }}
+                                                        placeholder="Повторите пароль"
+                                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
+                                                        disabled={resetLoading}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={resetStep === 1 ? handleRequestReset : resetStep === 2 ? handleVerifyCode : handleResetPassword}
+                                        disabled={resetLoading || (resetStep === 1 ? !resetEmail : resetStep === 2 ? resetCode.length !== 6 : !newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.length < 6)}
+                                        className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {resetLoading && (
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        )}
+                                        {resetLoading ? 'Подождите...' : resetStep === 1 ? 'Отправить код' : resetStep === 2 ? 'Подтвердить' : 'Сохранить пароль'}
+                                    </button>
+
+                                    {resetStep === 2 && (
+                                        <button
+                                            onClick={() => { setResetStep(1); setResetCode(''); setResetError(''); }}
+                                            className="w-full mt-2 py-2 px-4 text-sm text-purple-600 hover:text-purple-700 transition-colors"
+                                            disabled={resetLoading}
+                                        >
+                                            Отправить код повторно
+                                        </button>
+                                    )}
+
+                                    <button
+                                        onClick={() => { handleCancelReset(); setResetStep(0); }}
+                                        className="w-full mt-3 py-3 px-4 text-gray-600 hover:text-gray-800 transition-colors"
+                                        disabled={resetLoading}
+                                    >
+                                        ← Вернуться к входу
+                                    </button>
+                                </div>
                             ) : (
                                 <div>
                                     <div className="mb-4">
@@ -1944,14 +2148,28 @@
                                             : (isRegisterMode ? 'Зарегистрироваться' : 'Войти')
                                         }
                                     </button>
-                                    
+
+                                    {!isRegisterMode && resetStep === 0 && (
+                                        <button
+                                            onClick={() => {
+                                                setResetStep(1);
+                                                setResetEmail(email);
+                                                setResetError('');
+                                                setResetSuccess('');
+                                            }}
+                                            className="w-full mt-2 py-2 px-4 text-sm text-gray-500 hover:text-purple-600 transition-colors"
+                                        >
+                                            Забыли пароль?
+                                        </button>
+                                    )}
+
                                     <button
                                         onClick={() => setIsRegisterMode(!isRegisterMode)}
                                         className="w-full mt-3 py-3 px-4 text-purple-600 hover:text-purple-700 transition-colors font-medium"
                                     >
                                         {isRegisterMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
                                     </button>
-                                    
+
                                     <button
                                         onClick={() => {
                                             setShowEmailLogin(false);
@@ -1961,6 +2179,8 @@
                                             setPassword('');
                                             setConfirmPassword('');
                                             setAuthError('');
+                                            setResetStep(0);
+                                            handleCancelReset();
                                         }}
                                         className="w-full mt-2 py-3 px-4 text-gray-600 hover:text-gray-800 transition-colors"
                                         disabled={authLoading}
