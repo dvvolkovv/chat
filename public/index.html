@@ -536,60 +536,20 @@
             const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false, chatId: null, chatName: '' });
             const [isDeletingChat, setIsDeletingChat] = useState(false);
             const [userProfile, setUserProfile] = useState({
-                // Личное
-                likes: ['Программирование', 'Путешествия', 'Чтение'],
-                dislikes: ['Спешка', 'Беспорядок'],
-                interests: ['Искусственный интеллект', 'Веб-разработка', 'Дизайн'],
-                desires: ['Создать успешный проект', 'Улучшить навыки'],
-                intentions: ['Научиться новым технологиям', 'Развиваться профессионально'],
-                values: ['Качество', 'Простота', 'Эффективность'],
-                beliefs: ['Постоянное обучение важно', 'Качество важнее количества'],
-                skills: ['JavaScript', 'React', 'Python', 'UI/UX дизайн'],
-                hobbies: ['Чтение', 'Программирование', 'Путешествия'],
-                
-                // Профессиональное
-                occupation: 'Разработчик',
-                experienceLevel: 'Средний',
-                industry: 'IT / Технологии',
-                currentProjects: ['Веб-приложение', 'AI чат-бот'],
-                learningGoals: ['Изучить новые фреймворки', 'Улучшить навыки дизайна'],
-                
-                // Коммуникация
-                communicationStyle: 'Сбалансированный',
-                detailLevel: 'Средний',
-                technicalDepth: 'Средний',
-                languagePreference: 'Русский',
-                tonePreference: 'Дружеский',
-                
-                // Контекст
-                painPoints: ['Нехватка времени', 'Сложность в организации'],
-                motivations: ['Создать качественный продукт', 'Постоянно учиться'],
-                challenges: ['Баланс работы и жизни', 'Управление временем'],
-                strengths: ['Быстрое обучение', 'Внимание к деталям'],
-                
-                // Цели
-                shortTermGoals: ['Завершить текущий проект', 'Изучить новую технологию'],
-                longTermGoals: ['Стать senior разработчиком', 'Запустить свой продукт'],
-                
-                // Социальные
-                relationshipStatus: 'Не указано',
-                family: 'Не указано',
-                socialPreferences: ['Небольшие компании', 'Глубокие разговоры'],
-                
-                // Здоровье и благополучие
-                healthGoals: ['Улучшить физическую форму', 'Больше спать'],
-                dietaryPreferences: ['Здоровое питание', 'Умеренность'],
-                exerciseHabits: ['Прогулки', 'Йога'],
-                stressLevel: 'Средний',
-                energyLevel: 'Средний',
-                
-                // Другое (для каждой категории)
-                personalOther: [],
-                professionalOther: [],
-                communicationOther: [],
-                goalsOther: [],
-                socialOther: [],
-                healthOther: []
+                likes: [], dislikes: [], interests: [], desires: [], intentions: [],
+                values: [], beliefs: [], skills: [], hobbies: [],
+                occupation: '', experienceLevel: '', industry: '',
+                currentProjects: [], learningGoals: [],
+                communicationStyle: '', detailLevel: '', technicalDepth: '',
+                languagePreference: '', tonePreference: '',
+                painPoints: [], motivations: [], challenges: [], strengths: [],
+                shortTermGoals: [], longTermGoals: [],
+                relationshipStatus: '', family: '',
+                socialPreferences: [],
+                healthGoals: [], dietaryPreferences: [], exerciseHabits: [],
+                stressLevel: '', energyLevel: '',
+                personalOther: [], professionalOther: [], communicationOther: [],
+                goalsOther: [], socialOther: [], healthOther: []
             });
             const messagesEndRef = useRef(null);
             const textareaRef = useRef(null);
@@ -598,6 +558,23 @@
             const mediaRecorderRef = useRef(null);
 
             const activeTab = tabs.find(tab => tab.id === activeTabId);
+
+            // Загрузка профиля пользователя из БД
+            const loadUserProfile = async (email) => {
+                try {
+                    const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/get_profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    const result = await response.json();
+                    if (result.success && result.profile && result.profile.profile_data) {
+                        setUserProfile(prev => ({ ...prev, ...result.profile.profile_data }));
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки профиля:', e);
+                }
+            };
 
             const scrollToBottom = () => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -613,6 +590,7 @@
                         const userData = JSON.parse(savedUserData);
                         setUser(userData);
                         setIsAuthenticated(true);
+                        loadUserProfile(userData.email);
                     } catch (error) {
                         console.error('Ошибка восстановления сессии:', error);
                         localStorage.removeItem('user_id');
@@ -795,6 +773,7 @@
                     };
                     setUser(userData);
                     setIsAuthenticated(true);
+                    loadUserProfile(userData.email);
                     return;
                 }
                 
@@ -840,6 +819,7 @@
                     setIsAuthenticated(true);
                     setShowEmailLogin(false);
                     setTokenBalance(data.token_balance || 10000);
+                    loadUserProfile(userData.email);
                     
                     // Очистка полей
                     setEmail('');
@@ -907,6 +887,7 @@
                     setShowEmailLogin(false);
                     setIsRegisterMode(false);
                     setTokenBalance(data.token_balance || 10000);
+                    loadUserProfile(userData.email);
                     
                     // Очистка полей
                     setName('');
@@ -1161,9 +1142,6 @@
                     return tab;
                 }));
                 
-                // Симуляция обновления профиля
-                simulateProfileUpdate(messageText);
-                
                 try {
                     const hasFiles = messageFiles.length > 0 && messageFiles.some(f => f.file);
 
@@ -1312,7 +1290,12 @@
                         }
                     }
                     } // конец else (обычный чат)
-                    
+
+                    // Перезагрузка профиля после чата (fire-and-forget)
+                    if (user && user.email) {
+                        loadUserProfile(user.email);
+                    }
+
                 } catch (error) {
                     console.error('Ошибка отправки сообщения:', error);
                     
@@ -1332,51 +1315,6 @@
                         }
                         return t;
                     }));
-                }
-            };
-
-            const simulateProfileUpdate = (message) => {
-                // Простая симуляция извлечения информации из сообщения
-                const lowerMessage = message.toLowerCase();
-                
-                // Примеры ключевых слов для обновления профиля
-                if (lowerMessage.includes('люблю') || lowerMessage.includes('нравится')) {
-                    const keywords = ['кофе', 'музыка', 'спорт', 'кино', 'книги', 'природа'];
-                    keywords.forEach(keyword => {
-                        if (lowerMessage.includes(keyword) && !userProfile.likes.includes(keyword.charAt(0).toUpperCase() + keyword.slice(1))) {
-                            setUserProfile(prev => ({
-                                ...prev,
-                                likes: [...prev.likes, keyword.charAt(0).toUpperCase() + keyword.slice(1)]
-                            }));
-                        }
-                    });
-                }
-                
-                if (lowerMessage.includes('не люблю') || lowerMessage.includes('не нравится')) {
-                    const keywords = ['шум', 'толпа', 'жара', 'холод'];
-                    keywords.forEach(keyword => {
-                        if (lowerMessage.includes(keyword) && !userProfile.dislikes.includes(keyword.charAt(0).toUpperCase() + keyword.slice(1))) {
-                            setUserProfile(prev => ({
-                                ...prev,
-                                dislikes: [...prev.dislikes, keyword.charAt(0).toUpperCase() + keyword.slice(1)]
-                            }));
-                        }
-                    });
-                }
-                
-                if (lowerMessage.includes('хочу') || lowerMessage.includes('мечтаю')) {
-                    const keywords = ['путешествовать', 'учиться', 'развиваться', 'создать'];
-                    keywords.forEach(keyword => {
-                        if (lowerMessage.includes(keyword)) {
-                            const desire = keyword.charAt(0).toUpperCase() + keyword.slice(1);
-                            if (!userProfile.desires.some(d => d.toLowerCase().includes(keyword))) {
-                                setUserProfile(prev => ({
-                                    ...prev,
-                                    desires: [...prev.desires, desire]
-                                }));
-                            }
-                        }
-                    });
                 }
             };
 
@@ -1524,13 +1462,22 @@
                 setNewItemInput({});
             };
 
-            const saveProfile = () => {
+            const saveProfile = async () => {
                 setUserProfile(editedProfile);
                 setIsEditingProfile(false);
                 setEditedProfile(null);
                 setNewItemInput({});
-                // Можно добавить уведомление об успешном сохранении
-                // alert('Профиль успешно обновлен');
+                if (user && user.email) {
+                    try {
+                        await fetch('https://nomira-ai-test.up.railway.app/webhook/save_profile', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: user.email, profile_data: editedProfile })
+                        });
+                    } catch (e) {
+                        console.error('Ошибка сохранения профиля:', e);
+                    }
+                }
             };
 
             const updateProfileField = (field, value) => {
@@ -2106,8 +2053,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.occupation}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.occupation ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.occupation || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2122,8 +2069,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.experienceLevel}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.experienceLevel ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.experienceLevel || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2137,8 +2084,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.industry}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.industry ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.industry || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2202,8 +2149,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.communicationStyle}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.communicationStyle ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.communicationStyle || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2218,8 +2165,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.detailLevel}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.detailLevel ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.detailLevel || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2234,8 +2181,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.technicalDepth}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.technicalDepth ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.technicalDepth || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2250,8 +2197,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.languagePreference}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.languagePreference ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.languagePreference || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2266,8 +2213,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.tonePreference}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.tonePreference ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.tonePreference || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2402,8 +2349,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.relationshipStatus}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.relationshipStatus ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.relationshipStatus || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2418,8 +2365,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.family}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.family ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.family || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2461,8 +2408,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.stressLevel}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.stressLevel ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.stressLevel || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
@@ -2477,8 +2424,8 @@
                                                         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-gray-900"
                                                     />
                                                 ) : (
-                                                    <div className="text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200">
-                                                        {userProfile.energyLevel}
+                                                    <div className={`text-sm bg-gray-50 px-3 py-1.5 rounded-md inline-block border border-gray-200 ${userProfile.energyLevel ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                                        {userProfile.energyLevel || 'Не указано'}
                                                     </div>
                                                 )}
                                             </div>
