@@ -535,6 +535,9 @@
             const [newItemInput, setNewItemInput] = useState({});
             const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false, chatId: null, chatName: '' });
             const [isDeletingChat, setIsDeletingChat] = useState(false);
+            const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false);
+            const [systemPromptText, setSystemPromptText] = useState('');
+            const [isSavingSystemPrompt, setIsSavingSystemPrompt] = useState(false);
             const [userProfile, setUserProfile] = useState({
                 likes: [], dislikes: [], interests: [], desires: [], intentions: [],
                 values: [], beliefs: [], skills: [], hobbies: [],
@@ -1452,6 +1455,49 @@
                 setTabs(tabs.map(tab => 
                     tab.id === activeTabId ? { ...tab, model: numericModelId } : tab
                 ));
+            };
+
+            const openSystemPrompt = async () => {
+                if (!activeTab || !activeTab.chat_id || !user) return;
+                setSystemPromptText('');
+                setIsSystemPromptOpen(true);
+                try {
+                    const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/get_chat_settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: user.email, chat_id: activeTab.chat_id })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        setSystemPromptText(data.system_prompt || '');
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки системного промпта:', e);
+                }
+            };
+
+            const saveSystemPrompt = async () => {
+                if (!activeTab || !activeTab.chat_id || !user) return;
+                setIsSavingSystemPrompt(true);
+                try {
+                    const response = await fetch('https://nomira-ai-test.up.railway.app/webhook/update_chat_settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: user.email,
+                            chat_id: activeTab.chat_id,
+                            system_prompt: systemPromptText
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        setIsSystemPromptOpen(false);
+                    }
+                } catch (e) {
+                    console.error('Ошибка сохранения системного промпта:', e);
+                } finally {
+                    setIsSavingSystemPrompt(false);
+                }
             };
 
             const handleFileSelect = (e) => {
@@ -2633,8 +2679,21 @@
                                         ))
                                     )}
                                 </select>
+
+                                {/* Кнопка системного промпта */}
+                                <button
+                                    onClick={openSystemPrompt}
+                                    disabled={!activeTab}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 active:bg-gray-100 md:hover:bg-gray-100 transition-colors disabled:opacity-30"
+                                    title="Системный промпт"
+                                >
+                                    <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </button>
                             </div>
-                            
+
                             {/* Баланс токенов */}
                             <div>
                                 <span className="token-badge" style={{ padding: '4px 10px', fontSize: '11px', gap: '4px' }}>
@@ -2897,6 +2956,51 @@
                                             </>
                                         ) : (
                                             'Удалить'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Модальное окно системного промпта */}
+                    {isSystemPromptOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+                            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 animate-fadeIn">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                                    Системный промпт
+                                </h3>
+                                <p className="text-xs text-gray-500 mb-4">
+                                    Инструкции для AI в этом чате. Применяются к каждому сообщению.
+                                </p>
+                                <textarea
+                                    value={systemPromptText}
+                                    onChange={(e) => setSystemPromptText(e.target.value)}
+                                    placeholder="Например: Отвечай кратко и по делу. Используй примеры кода на Python."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:border-gray-400 focus:outline-none resize-y"
+                                    rows="6"
+                                    style={{ minHeight: '120px', maxHeight: '400px' }}
+                                />
+                                <div className="flex space-x-3 mt-4">
+                                    <button
+                                        onClick={() => setIsSystemPromptOpen(false)}
+                                        disabled={isSavingSystemPrompt}
+                                        className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 active:bg-gray-300 transition-colors disabled:opacity-50"
+                                    >
+                                        Отмена
+                                    </button>
+                                    <button
+                                        onClick={saveSystemPrompt}
+                                        disabled={isSavingSystemPrompt}
+                                        className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 active:bg-black transition-colors disabled:opacity-50 flex items-center justify-center"
+                                    >
+                                        {isSavingSystemPrompt ? (
+                                            <>
+                                                <div className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                                Сохранение...
+                                            </>
+                                        ) : (
+                                            'Сохранить'
                                         )}
                                     </button>
                                 </div>
