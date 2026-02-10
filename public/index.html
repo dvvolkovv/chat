@@ -1075,6 +1075,7 @@
                         messages: [], // Сообщения загрузятся при открытии чата
                         model: chat.model_id,
                         message_count: chat.message_count,
+                        hasSystemPrompt: chat.has_system_prompt || false,
                         isMessagesLoaded: false // Флаг загрузки сообщений
                     }));
                     
@@ -1637,6 +1638,9 @@
                     const data = await response.json();
                     if (data.success) {
                         setIsSystemPromptOpen(false);
+                        setTabs(prev => prev.map(tab =>
+                            tab.id === activeTabId ? { ...tab, hasSystemPrompt: !!systemPromptText.trim() } : tab
+                        ));
                     }
                 } catch (e) {
                     console.error('Ошибка сохранения системного промпта:', e);
@@ -2982,7 +2986,11 @@
                                 <button
                                     onClick={openSystemPrompt}
                                     disabled={!activeTab}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 active:bg-gray-100 md:hover:bg-gray-100 transition-colors disabled:opacity-30"
+                                    className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 ${
+                                        activeTab?.hasSystemPrompt
+                                            ? 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'
+                                            : 'text-gray-400 hover:text-gray-600 active:bg-gray-100 md:hover:bg-gray-100'
+                                    }`}
                                     title="Системный промпт"
                                 >
                                     <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
