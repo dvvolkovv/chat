@@ -643,6 +643,13 @@
                 }
             }, []);
 
+            // Загрузка баланса при авторизации
+            useEffect(() => {
+                if (isAuthenticated && user?.email) {
+                    fetchBalance();
+                }
+            }, [isAuthenticated, user]);
+
             // Загрузка чатов после авторизации
             useEffect(() => {
                 if (isAuthenticated && user && models.length > 0) {
