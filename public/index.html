@@ -31,7 +31,6 @@
         
         html, body, #root {
             height: 100%;
-            overflow: hidden;
         }
 
         body {
@@ -478,7 +477,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 40px 20px;
             overflow-y: auto;
         }
         .landing-fade-in { animation: fadeIn 0.6s ease; }
@@ -2364,7 +2363,7 @@
 
             // Главный интерфейс чата
             return (
-                <div className="flex app-height bg-white">
+                <div className="flex app-height bg-white" style={{ overflow: 'hidden' }}>
                     {/* Overlay для мобильных и профиля */}
                     {(isMobileSidebarOpen || isProfileOpen) && (
                         <div 
