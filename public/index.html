@@ -3400,7 +3400,7 @@
                                                         className="text-gray-800 text-sm leading-relaxed markdown-content"
                                                         dangerouslySetInnerHTML={{ __html: marked.parse(message.content || '') }}
                                                     />
-                                                ))}
+                                                )}
                                                 {message.files && message.files.length > 0 && (
                                                     <div className="mt-3 space-y-2">
                                                         {message.files.map((file, fileIndex) => (
