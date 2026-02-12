@@ -136,13 +136,13 @@ frontend/
 ## Backend API
 
 Фронтенд подключается к n8n API:
-- `https://nomira-ai-test.up.railway.app/webhook/get_llm` - список моделей
-- `https://nomira-ai-test.up.railway.app/webhook/register` - регистрация
-- `https://nomira-ai-test.up.railway.app/webhook/login` - вход
-- `https://nomira-ai-test.up.railway.app/webhook/get_chats` - список чатов
-- `https://nomira-ai-test.up.railway.app/webhook/create_chat` - создание чата
-- `https://nomira-ai-test.up.railway.app/webhook/get_messages` - история сообщений
-- `https://nomira-ai-test.up.railway.app/webhook/chat` - отправка сообщения (streaming)
+- `https://travel-n8n.up.railway.app/webhook/get_llm` - список моделей
+- `https://travel-n8n.up.railway.app/webhook/register` - регистрация
+- `https://travel-n8n.up.railway.app/webhook/login` - вход
+- `https://travel-n8n.up.railway.app/webhook/get_chats` - список чатов
+- `https://travel-n8n.up.railway.app/webhook/create_chat` - создание чата
+- `https://travel-n8n.up.railway.app/webhook/get_messages` - история сообщений
+- `https://travel-n8n.up.railway.app/webhook/chat` - отправка сообщения (streaming)
 
 ## Поддержка
 
